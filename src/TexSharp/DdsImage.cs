@@ -82,6 +82,7 @@ public sealed class DdsImage
         Mips = mips;
         IsSrgb = srgb;
         IsSnorm = snorm;
+        ColorSpaceKnown = srgb || snorm || format is TextureFormat.Rgba8 or TextureFormat.Bgra8 or TextureFormat.Bc6 or TextureFormat.Bc7 || format.IsAstc();
     }
 
     public int Width { get; }
@@ -89,6 +90,13 @@ public sealed class DdsImage
     public TextureFormat Format { get; }
     public bool IsSrgb { get; }
     public bool IsSnorm { get; }
+
+    /// <summary>
+    /// Whether the image says anything about colour space. A file with a legacy FourCC (BC1 to BC5) or pixel
+    /// masks can't, so <see cref="IsSrgb"/> being false there means "not stated", not "linear"; import code should
+    /// leave the target's colour space alone. Files with a DX10 header can.
+    /// </summary>
+    public bool ColorSpaceKnown { get; private init; }
 
     /// <summary>Raw level data, largest first.</summary>
     public IReadOnlyList<byte[]> Mips { get; }
@@ -110,6 +118,7 @@ public sealed class DdsImage
         uint rgbBits = BinaryPrimitives.ReadUInt32LittleEndian(data[88..]);
 
         int payload = HeaderSize;
+        bool dx10Header = false;
         TextureFormat format;
         bool srgb = false, snorm = false;
 
@@ -118,6 +127,7 @@ public sealed class DdsImage
             if (data.Length < HeaderSize + Dx10HeaderSize) throw new InvalidDataException("DDS DX10 header truncated.");
             uint dxgi = BinaryPrimitives.ReadUInt32LittleEndian(data[HeaderSize..]);
             payload = HeaderSize + Dx10HeaderSize;
+            dx10Header = true;
             if (!TryFormatFromDxgi(dxgi, out format, out srgb, out snorm))
                 throw new NotSupportedException($"Unsupported DXGI format {dxgi} in DDS.");
         }
@@ -153,7 +163,7 @@ public sealed class DdsImage
             cursor += size;
         }
 
-        return new DdsImage(width, height, format, mips, srgb, snorm);
+        return new DdsImage(width, height, format, mips, srgb, snorm) { ColorSpaceKnown = dx10Header };
     }
 
     public byte[] ToBytes()

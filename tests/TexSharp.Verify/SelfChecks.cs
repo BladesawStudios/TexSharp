@@ -47,6 +47,17 @@ internal static class SelfChecks
         Bc7Reserved(pixels);
         Check(pixels.All(b => b == 0), "BC7 reserved mode gives zeros");
 
+        // Colour space: a legacy-FourCC DDS can't state one, a DX10 one can.
+        {
+            var bc1 = new DdsImage(4, 4, TextureFormat.Bc1, [new byte[8]], srgb: true);
+            Check(bc1.ColorSpaceKnown, "an in-memory sRGB image states its colour space");
+            Check(!DdsImage.Parse(bc1.ToBytes()).ColorSpaceKnown, "a BC1 DDS file can't state a colour space");
+            var bc7 = new DdsImage(4, 4, TextureFormat.Bc7, [new byte[16]], srgb: true);
+            DdsImage parsed = DdsImage.Parse(bc7.ToBytes());
+            Check(parsed.ColorSpaceKnown && parsed.IsSrgb, "a BC7 DX10 DDS keeps sRGB");
+            Check(!new DdsImage(4, 4, TextureFormat.Bc1, [new byte[8]]).ColorSpaceKnown, "a plain BC1 image doesn't state one");
+        }
+
         // Bad input.
         Check(Throws<ArgumentException>(() => TextureDecoder.ToRgba8(TextureFormat.Bc1, new byte[7], 4, 4)), "short payload rejected");
         Check(Throws<InvalidDataException>(() => DdsImage.Parse("DDS "u8)), "truncated DDS rejected");
