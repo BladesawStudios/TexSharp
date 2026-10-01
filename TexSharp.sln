@@ -1,0 +1,22 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TexSharp", "src\TexSharp\TexSharp.csproj", "{2ABFB544-F8C9-456E-9BE1-65B3E7296457}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TexSharp.Verify", "tests\TexSharp.Verify\TexSharp.Verify.csproj", "{2A0C3900-9F05-463B-97EA-EE2D0B4FFF5B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2ABFB544-F8C9-456E-9BE1-65B3E7296457}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2ABFB544-F8C9-456E-9BE1-65B3E7296457}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2ABFB544-F8C9-456E-9BE1-65B3E7296457}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2ABFB544-F8C9-456E-9BE1-65B3E7296457}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2A0C3900-9F05-463B-97EA-EE2D0B4FFF5B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2A0C3900-9F05-463B-97EA-EE2D0B4FFF5B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2A0C3900-9F05-463B-97EA-EE2D0B4FFF5B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2A0C3900-9F05-463B-97EA-EE2D0B4FFF5B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
