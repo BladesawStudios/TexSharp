@@ -35,6 +35,13 @@ other uncompressed formats use pixel masks. Only 2D, single-slice surfaces are h
 R8, RG8, R5G6B5 and RGBA4 are awkward in an image editor, so `PixelFormats.ExpandToRgba8` and
 `CollapseRgba8` turn them into an RGBA8 image and back. For an unedited image that round trip is exact.
 
+## Looking at a texture
+
+`TextureDecoder.ToRgba8` gives the channels as stored. `TextureDecoder.Render` applies the texture's channel
+swizzle as well (a `ChannelMap`, from `ChannelMap.FromBntx` or `ChannelMap.FromTxtg`) and, for a BC5 tangent-space
+normal map, rebuilds the blue channel. `PngWriter.Encode` turns the result into a PNG. Both `BntxTexture` and
+`TxtgFile` have `Render` and `ToPng` that do this with their own channel data.
+
 ## Decoding
 
 | Format | |
