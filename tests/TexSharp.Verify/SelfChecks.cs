@@ -58,6 +58,16 @@ internal static class SelfChecks
             Check(!new DdsImage(4, 4, TextureFormat.Bc1, [new byte[8]]).ColorSpaceKnown, "a plain BC1 image doesn't state one");
         }
 
+        // Channel maps and PNG.
+        Check(ChannelMap.FromTxtg(0, 1, 2, 3).IsIdentity, "TXTG selectors 0 1 2 3 are the identity");
+        Check(ChannelMap.FromTxtg(0, 0, 0, 1) == new ChannelMap(ChannelSource.Red, ChannelSource.Red, ChannelSource.Red, ChannelSource.Green), "TXTG selectors 0 0 0 1");
+        Check(ChannelMap.FromTxtg(0, 1, 4, 5) == new ChannelMap(ChannelSource.Red, ChannelSource.Green, ChannelSource.Zero, ChannelSource.One), "TXTG zero and one selectors");
+        Check(ChannelMap.FromBntx(2, 3, 4, 5).IsIdentity && ChannelMap.FromBntx(9, 3, 4, 5).Red == ChannelSource.Red, "BNTX channel values, and an unknown one reading red");
+        Check(ChannelMap.FromTxtg(0, 1, 4, 5).IsTangentNormal && !ChannelMap.Identity.IsTangentNormal, "tangent-space normal signature");
+        byte[] png = PngWriter.Encode(new byte[4 * 3 * 2], 3, 2);
+        Check(png.AsSpan(0, 8).SequenceEqual(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }), "PNG signature");
+        Check(Throws<ArgumentException>(() => PngWriter.Encode(new byte[3], 2, 2)), "short PNG pixels rejected");
+
         // Bad input.
         Check(Throws<ArgumentException>(() => TextureDecoder.ToRgba8(TextureFormat.Bc1, new byte[7], 4, 4)), "short payload rejected");
         Check(Throws<InvalidDataException>(() => DdsImage.Parse("DDS "u8)), "truncated DDS rejected");

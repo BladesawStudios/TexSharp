@@ -77,6 +77,20 @@ public static class TextureDecoder
         return rgba;
     }
 
+    /// <summary>
+    /// <see cref="ToRgba8"/> as the texture is meant to be seen: the channel swizzle applied, and for a BC5 tangent-space
+    /// normal map (see <see cref="ChannelMap.IsTangentNormal"/>) the blue channel rebuilt.
+    /// </summary>
+    public static byte[] Render(TextureFormat format, ReadOnlySpan<byte> data, int width, int height, ChannelMap channels, bool snorm = false)
+    {
+        byte[] rgba = ToRgba8(format, data, width, height, snorm);
+        if (format == TextureFormat.Bc5 && channels.IsTangentNormal)
+            ReconstructNormalZ(rgba);
+        else
+            channels.Apply(rgba);
+        return rgba;
+    }
+
     /// <summary>Rebuilds the blue channel of a tangent-space normal from the red and green BC5 gives, in place.</summary>
     public static void ReconstructNormalZ(Span<byte> rgba)
     {
