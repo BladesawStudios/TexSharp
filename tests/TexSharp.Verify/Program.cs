@@ -3,6 +3,7 @@ using TexSharp;
 // Decoder comparison: Program <cases dir>
 // DDS comparison with files from the Python writer: Program dds <dir>
 // Checks that need no reference: Program self
+// Channel swizzle against the Python renderer: Program swizzle <dir>; PNG files for another reader: Program png <dir>
 // Each manifest line is "name format width height"; <name>.in holds the payload and <name>.out the
 // expected RGBA8 from a reference decoder.
 if (args.Length < 1)
@@ -13,6 +14,8 @@ if (args.Length < 1)
 
 if (args[0] == "dds") return DdsChecks.Run(args[1]);
 if (args[0] == "self") return SelfChecks.Run();
+if (args[0] == "swizzle") return ChannelChecks.Swizzle(args[1]);
+if (args[0] == "png") return ChannelChecks.WritePngs(args[1]);
 
 string dir = args[0];
 Dictionary<string, (int Cases, int Bad, long Pixels, long BadPixels)> stats = [];
