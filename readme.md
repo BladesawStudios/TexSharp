@@ -35,6 +35,20 @@ other uncompressed formats use pixel masks. Only 2D, single-slice surfaces are h
 R8, RG8, R5G6B5 and RGBA4 are awkward in an image editor, so `PixelFormats.ExpandToRgba8` and
 `CollapseRgba8` turn them into an RGBA8 image and back. For an unedited image that round trip is exact.
 
+## Converting
+
+`TextureConverter.Convert(dds, format, width, height, mipCount, srgb)` makes the mip data for a texture of that size and
+format from any DDS: it decodes, resizes if the size differs (alpha-weighted, in linear light for sRGB), keeps the DDS's own
+mips when the size already matches and there are enough, otherwise rebuilds the chain, and encodes each level with
+`TextureEncoder.Encode`. `BntxSharp` and `TxtgSharp` use it in `ReplaceLayerFromDds` so a layer of an array texture takes
+whatever DDS it is given. `TextureConverter.Differences` lists what would change.
+
+The encoders are written for this library and aim to land close to the source, not to beat dedicated compressors: BC1
+(with one-bit alpha), BC2, BC3, BC4, BC5 and BC7 (mode 6 only) pick endpoints along the main axis of each block and refine
+them by least squares; ASTC (all 2D footprints, LDR) writes one partition per block and tries a few block modes per block,
+keeping whichever decodes closest. Checked by `TexSharp.Verify encode`, which round-trips a picture through every format
+and prints the PSNR. BC6H and signed formats are not encodable.
+
 ## Looking at a texture
 
 `TextureDecoder.ToRgba8` gives the channels as stored. `TextureDecoder.Render` applies the texture's channel

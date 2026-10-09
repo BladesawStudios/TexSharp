@@ -3,7 +3,7 @@ using System.Buffers.Binary;
 namespace TexSharp;
 
 // LDR ASTC decoder, 2D footprints 4x4 to 12x12. Blocks the spec marks invalid, and blocks using HDR modes, decode to the error colour.
-internal static class AstcDecoder
+internal static partial class AstcDecoder
 {
     private const int MaxTexels = 144;
     private const int GridOffset = 0;
@@ -571,7 +571,7 @@ internal static class AstcDecoder
     }
 
     // Integer sequence encoding tables, built on first use.
-    private static class Tables
+    internal static partial class Tables
     {
         public const int RangeCount = 21;
 
