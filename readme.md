@@ -49,6 +49,11 @@ them by least squares; ASTC (all 2D footprints, LDR) writes one partition per bl
 keeping whichever decodes closest. Checked by `TexSharp.Verify encode`, which round-trips a picture through every format
 and prints the PSNR. BC6H and signed formats are not encodable.
 
+## JPEG
+
+`JpegWriter.Encode(rgba, width, height, quality: 75)` writes a baseline JPEG (4:2:0, the standard tables, alpha dropped) so a
+texture can be exported for programs that want one. It matches Pillow's default output to about 47 dB PSNR, within 1% in size.
+
 ## Looking at a texture
 
 `TextureDecoder.ToRgba8` gives the channels as stored. `TextureDecoder.Render` applies the texture's channel

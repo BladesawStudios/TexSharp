@@ -15,6 +15,7 @@ if (args.Length < 1)
 if (args[0] == "dds") return DdsChecks.Run(args[1]);
 if (args[0] == "self") return SelfChecks.Run();
 if (args[0] == "encode") return EncodeChecks.Run();
+if (args[0] == "jpeg") return EncodeChecks.WriteJpegs(args[1]);
 if (args[0] == "swizzle") return ChannelChecks.Swizzle(args[1]);
 if (args[0] == "png") return ChannelChecks.WritePngs(args[1]);
 

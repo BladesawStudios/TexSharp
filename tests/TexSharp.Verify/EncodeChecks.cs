@@ -43,7 +43,19 @@ internal static class EncodeChecks
         return sum == 0 ? 99 : 10 * Math.Log10(255.0 * 255.0 / (sum / count));
     }
 
-    public static int Run()
+    // JPEGs of awkward sizes, for another program to open: Program jpeg <dir>
+    public static int WriteJpegs(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        foreach (var (w, h, quality) in new[] { (1, 1, 75), (7, 3, 75), (16, 16, 75), (17, 33, 75), (100, 1, 75), (64, 48, 100), (64, 48, 10) })
+        {
+            byte[] picture = Picture(w, h);
+            File.WriteAllBytes(Path.Combine(dir, $"{w}x{h}_q{quality}.jpg"), JpegWriter.Encode(picture, w, h, quality));
+        }
+        return 0;
+    }
+
+    public static int Run()
     {
         int w = 96, h = 80, failures = 0;
         byte[] source = Picture(w, h);
