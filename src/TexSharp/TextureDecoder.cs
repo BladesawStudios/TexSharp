@@ -1,15 +1,16 @@
 namespace TexSharp;
 
 /// <summary>Decodes one linear mip level (as BntxSharp's deswizzle or a DDS gives it) to RGBA8.</summary>
+/// <remarks>
+/// The result is width * height * 4 bytes, row-major, in R, G, B, A order. BC4 and the other one-channel formats come
+/// out as grey and BC5 as red and green with blue zero; undoing a normal map's packing is left to the caller. HDR BC6
+/// and the float formats are clamped to 0..1, depth comes out in red with stencil in green, and signed (snorm or sint)
+/// channels go through <see cref="SignedValues"/>.
+/// </remarks>
 public static class TextureDecoder
 {
     private delegate void BlockDecoder(ReadOnlySpan<byte> block, Span<byte> pixels);
 
-    /// <summary>
-    /// Returns width * height * 4 bytes, row-major, in R, G, B, A order. BC4 comes out as grey and BC5 as
-    /// red and green with blue zero; undoing a normal map's packing is left to the caller. HDR BC6 is
-    /// clamped to 0..1.
-    /// </summary>
     public static byte[] ToRgba8(TextureFormat format, ReadOnlySpan<byte> data, int width, int height, bool snorm = false)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
@@ -20,6 +21,9 @@ public static class TextureDecoder
 
         int pixelCount = checked(width * height);
         byte[] rgba = new byte[checked(pixelCount * 4)];
+
+        if (snorm && format is TextureFormat.R8 or TextureFormat.RG8 or TextureFormat.Rgba8)
+            return ToRgba8(format, SignedToUnsigned(data[..needed]), width, height);
 
         switch (format)
         {
@@ -45,8 +49,12 @@ public static class TextureDecoder
                     rgba[i * 4 + 3] = (byte)((v >> 30) * 85);
                 }
                 break;
-            case TextureFormat.R8 or TextureFormat.RG8 or TextureFormat.Rgb565 or TextureFormat.Rgba4:
+            case TextureFormat.R8 or TextureFormat.RG8 or TextureFormat.Rgb565 or TextureFormat.Rgba4
+                or (>= TextureFormat.Rg4 and <= TextureFormat.Bgr5A1):
                 return PixelFormats.ExpandToRgba8(format, data, pixelCount);
+            case var _ when WideFormats.Handles(format):
+                WideFormats.Decode(format, data, pixelCount, snorm, rgba);
+                break;
 
             case TextureFormat.Bc1:
                 DecodeBlocks(data, width, height, 8, rgba, (b, p) => BcDecoder.DecodeBc1(b, p));
@@ -100,6 +108,14 @@ public static class TextureDecoder
             float z = MathF.Sqrt(Math.Clamp(1f - x * x - y * y, 0f, 1f));
             rgba[i + 2] = (byte)Math.Clamp((z + 1f) * 127.5f, 0f, 255f);
         }
+    }
+
+    private static byte[] SignedToUnsigned(ReadOnlySpan<byte> data)
+    {
+        byte[] output = new byte[data.Length];
+        for (int i = 0; i < data.Length; i++)
+            output[i] = SignedValues.ToByte((sbyte)data[i]);
+        return output;
     }
 
     private static void DecodeBlocks(ReadOnlySpan<byte> data, int width, int height, int blockBytes, Span<byte> rgba, BlockDecoder decode)

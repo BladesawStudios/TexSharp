@@ -5,8 +5,10 @@ namespace TexSharp;
 /// Most image editors won't open a one or two channel DDS or a packed 16-bit one, so these are exported as RGBA8 and
 /// collapsed back on import. Every channel is 8 bits or fewer and is widened by repeating its bits, so for an unedited
 /// image expanding then collapsing gives the original bytes. Rgb10A2 doesn't fit in 8 bits per channel and is left out
-/// of the pair. A packed layout is the place and width of each channel in a little-endian 16-bit value, as Switch
-/// Toolbox reads Rgb565 and Rgba4. A missing alpha reads as 255.
+/// of the pair. A packed layout is the place and width of each channel in a little-endian 8 or 16-bit value: Rgb565 and
+/// Rgba4 as Switch Toolbox reads them, Bgr565 as Rgb565 with red and blue swapped, and the others with their
+/// first-named channel in the lowest bits (as nn::gfx names R10_G10_B10_A2). A missing blue reads as 0, a missing alpha
+/// as 255.
 /// </remarks>
 public static class PixelFormats
 {
@@ -20,6 +22,12 @@ public static class PixelFormats
     {
         [TextureFormat.Rgb565] = new(new(11, 5), new(5, 6), new(0, 5), None),
         [TextureFormat.Rgba4] = new(new(8, 4), new(4, 4), new(0, 4), new(12, 4)),
+        [TextureFormat.Rg4] = new(new(0, 4), new(4, 4), None, None),
+        [TextureFormat.Bgr565] = new(new(0, 5), new(5, 6), new(11, 5), None),
+        [TextureFormat.Abgr4] = new(new(12, 4), new(8, 4), new(4, 4), new(0, 4)),
+        [TextureFormat.Rgb5A1] = new(new(0, 5), new(5, 5), new(10, 5), new(15, 1)),
+        [TextureFormat.A1Bgr5] = new(new(11, 5), new(6, 5), new(1, 5), new(0, 1)),
+        [TextureFormat.Bgr5A1] = new(new(10, 5), new(5, 5), new(0, 5), new(15, 1)),
     };
 
     // the formats ExpandToRgba8 and CollapseRgba8 handle

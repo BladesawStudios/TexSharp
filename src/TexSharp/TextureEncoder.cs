@@ -2,12 +2,12 @@ using System.Buffers.Binary;
 
 namespace TexSharp;
 
-/// <summary>
-/// Encodes RGBA8 pixels into any of the formats <see cref="TextureDecoder"/> reads, so an image that doesn't match a
-/// texture can be converted to fit it. The block compressors are small and fast rather than exhaustive: the result
-/// is close to the source (they are checked by decoding it again) but a dedicated tool will squeeze out more quality.
-/// Not supported: BC6H (HDR) and signed (snorm) data.
-/// </summary>
+/// <summary>Encodes RGBA8 pixels into the formats <see cref="TextureDecoder"/> reads, so an image can be converted to fit a texture.</summary>
+/// <remarks>
+/// The block compressors are small and fast rather than exhaustive: the result is close to the source (they are checked
+/// by decoding it again) but a dedicated tool will squeeze out more quality. Not supported: BC6H (HDR), signed (snorm)
+/// data, RGB9E5 and depth. Float formats get the 8-bit values as 0..1.
+/// </remarks>
 public static class TextureEncoder
 {
     /// <summary>Why <paramref name="format"/> can't be encoded, or null if it can.</summary>
@@ -15,7 +15,7 @@ public static class TextureEncoder
     {
         if (format == TextureFormat.Bc6) return "BC6H holds HDR data, which can't be made from an 8-bit image.";
         if (snorm) return "signed (snorm) textures can't be made from an 8-bit image.";
-        return null;
+        return WideFormats.Handles(format) ? WideFormats.WhyNotEncodable(format) : null;
     }
 
     /// <summary>
@@ -60,8 +60,11 @@ public static class TextureEncoder
                 }
                 return output;
             }
-            case TextureFormat.R8 or TextureFormat.RG8 or TextureFormat.Rgb565 or TextureFormat.Rgba4:
+            case TextureFormat.R8 or TextureFormat.RG8 or TextureFormat.Rgb565 or TextureFormat.Rgba4
+                or (>= TextureFormat.Rg4 and <= TextureFormat.Bgr5A1):
                 return PixelFormats.CollapseRgba8(format, rgba, pixels);
+            case var _ when WideFormats.Handles(format):
+                return WideFormats.Encode(format, rgba, pixels);
         }
 
         byte[] result = new byte[format.LevelSize(width, height)];

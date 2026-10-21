@@ -2,14 +2,15 @@ using System.Buffers.Binary;
 
 namespace TexSharp;
 
-/// <summary>
-/// A 2D DDS with raw payload: block or pixel data, linear, split per mip. Nothing is decoded or
-/// re-encoded, so a BNTX level goes to DDS and back unchanged. Files are laid out the way Switch
-/// Toolbox writes them, so both tools read each other's output:
-/// BC1-BC5 use legacy FourCCs, RGBA8, BGRA8, BC6, BC7 and ASTC use the DX10 header with the unofficial ASTC DXGI
-/// values (<c>ASTC_4x4_UNORM = 134</c> ... <c>ASTC_12x12_UNORM_SRGB = 187</c>), and plain colour
-/// formats use pixel masks.
-/// </summary>
+/// <summary>A 2D DDS with raw payload: block or pixel data, linear, split per mip.</summary>
+/// <remarks>
+/// Nothing is decoded or re-encoded, so a BNTX level goes to DDS and back unchanged. Files are laid out the way Switch
+/// Toolbox writes them, so both tools read each other's output: BC1-BC5 use legacy FourCCs, RGBA8, BGRA8, BC6, BC7 and
+/// ASTC use the DX10 header with the unofficial ASTC DXGI values (<c>ASTC_4x4_UNORM = 134</c> ...
+/// <c>ASTC_12x12_UNORM_SRGB = 187</c>), and plain colour formats use pixel masks. Formats with more than 8 bits a
+/// channel, float, depth and signed formats use the DX10 header too, since masks can't describe them.
+/// B10G11R11Float has no DDS equivalent.
+/// </remarks>
 public sealed class DdsImage
 {
     private const int HeaderSize = 128;
@@ -57,6 +58,44 @@ public sealed class DdsImage
         [96] = (TextureFormat.Bc6, false, true),
         [98] = (TextureFormat.Bc7, false, false),
         [99] = (TextureFormat.Bc7, true, false),
+
+        [31] = (TextureFormat.Rgba8, false, true),
+        [51] = (TextureFormat.RG8, false, true),
+        [63] = (TextureFormat.R8, false, true),
+        [85] = (TextureFormat.Rgb565, false, false),
+        [86] = (TextureFormat.Bgr5A1, false, false),
+        [115] = (TextureFormat.Rgba4, false, false),
+        [56] = (TextureFormat.R16, false, false),
+        [58] = (TextureFormat.R16, false, true),
+        [35] = (TextureFormat.RG16, false, false),
+        [37] = (TextureFormat.RG16, false, true),
+        [11] = (TextureFormat.Rgba16, false, false),
+        [13] = (TextureFormat.Rgba16, false, true),
+        [42] = (TextureFormat.R32, false, false),
+        [43] = (TextureFormat.R32, false, true),
+        [17] = (TextureFormat.RG32, false, false),
+        [18] = (TextureFormat.RG32, false, true),
+        [7] = (TextureFormat.Rgb32, false, false),
+        [8] = (TextureFormat.Rgb32, false, true),
+        [3] = (TextureFormat.Rgba32, false, false),
+        [4] = (TextureFormat.Rgba32, false, true),
+        [54] = (TextureFormat.R16Float, false, false),
+        [34] = (TextureFormat.RG16Float, false, false),
+        [10] = (TextureFormat.Rgba16Float, false, false),
+        [41] = (TextureFormat.R32Float, false, false),
+        [16] = (TextureFormat.RG32Float, false, false),
+        [6] = (TextureFormat.Rgb32Float, false, false),
+        [2] = (TextureFormat.Rgba32Float, false, false),
+        [26] = (TextureFormat.R11G11B10Float, false, false),
+        [67] = (TextureFormat.Rgb9E5, false, false),
+        [45] = (TextureFormat.D24S8, false, false),
+        [20] = (TextureFormat.D32FloatS8X24, false, false),
+
+        // Read but never written: the same bytes as a format above.
+        [55] = (TextureFormat.R16, false, false), // D16_UNORM
+        [57] = (TextureFormat.R16, false, false), // R16_UINT
+        [59] = (TextureFormat.R16, false, true), // R16_SINT
+        [40] = (TextureFormat.R32Float, false, false), // D32_FLOAT
     };
 
     // Uncompressed layouts: bits per pixel and the R, G, B, A masks. A zero alpha mask means no alpha.
@@ -69,6 +108,12 @@ public sealed class DdsImage
         [TextureFormat.Rgb565] = (16, 0xF800, 0x07E0, 0x001F, 0),
         [TextureFormat.Rgba4] = (16, 0x0F00, 0x00F0, 0x000F, 0xF000),
         [TextureFormat.Rgb10A2] = (32, 0x000003FF, 0x000FFC00, 0x3FF00000, 0xC0000000),
+        [TextureFormat.Rg4] = (8, 0x0F, 0xF0, 0, 0),
+        [TextureFormat.Bgr565] = (16, 0x001F, 0x07E0, 0xF800, 0),
+        [TextureFormat.Abgr4] = (16, 0xF000, 0x0F00, 0x00F0, 0x000F),
+        [TextureFormat.Rgb5A1] = (16, 0x001F, 0x03E0, 0x7C00, 0x8000),
+        [TextureFormat.A1Bgr5] = (16, 0xF800, 0x07C0, 0x003E, 0x0001),
+        [TextureFormat.Bgr5A1] = (16, 0x7C00, 0x03E0, 0x001F, 0x8000),
     };
 
     public DdsImage(int width, int height, TextureFormat format, IReadOnlyList<byte[]> mips, bool srgb = false, bool snorm = false)
@@ -82,7 +127,7 @@ public sealed class DdsImage
         Mips = mips;
         IsSrgb = srgb;
         IsSnorm = snorm;
-        ColorSpaceKnown = srgb || snorm || format is TextureFormat.Rgba8 or TextureFormat.Bgra8 or TextureFormat.Bc6 or TextureFormat.Bc7 || format.IsAstc();
+        ColorSpaceKnown = srgb || snorm || UsesDx10(format, snorm);
     }
 
     public int Width { get; }
@@ -182,8 +227,7 @@ public sealed class DdsImage
         flags |= blockBased ? FlagsLinearSize : FlagsPitch;
 
         uint? legacyFourCc = LegacyFourCc(Format, IsSnorm);
-        // Rgba8 and Bgra8 could be written with masks, but Switch Toolbox gives them a DX10 header too.
-        bool dx10 = Format is TextureFormat.Rgba8 or TextureFormat.Bgra8 or TextureFormat.Bc6 or TextureFormat.Bc7 || Format.IsAstc();
+        bool dx10 = UsesDx10(Format, IsSnorm);
 
         int payloadSize = Mips.Sum(mip => mip.Length);
         byte[] output = new byte[HeaderSize + (dx10 ? Dx10HeaderSize : 0) + payloadSize];
@@ -261,13 +305,38 @@ public sealed class DdsImage
 
         return format switch
         {
-            TextureFormat.Rgba8 => srgb ? 29u : 28u,
+            TextureFormat.Rgba8 => srgb ? 29u : snorm ? 31u : 28u,
             TextureFormat.Bgra8 => srgb ? 91u : 87u,
             TextureFormat.Bc6 => snorm ? 96u : 95u,
             TextureFormat.Bc7 => srgb ? 99u : 98u,
+            TextureFormat.R8 => 63,
+            TextureFormat.RG8 => 51,
+            TextureFormat.R16 => snorm ? 58u : 56u,
+            TextureFormat.RG16 => snorm ? 37u : 35u,
+            TextureFormat.Rgba16 => snorm ? 13u : 11u,
+            TextureFormat.R32 => snorm ? 43u : 42u,
+            TextureFormat.RG32 => snorm ? 18u : 17u,
+            TextureFormat.Rgb32 => snorm ? 8u : 7u,
+            TextureFormat.Rgba32 => snorm ? 4u : 3u,
+            TextureFormat.R16Float => 54,
+            TextureFormat.RG16Float => 34,
+            TextureFormat.Rgba16Float => 10,
+            TextureFormat.R32Float => 41,
+            TextureFormat.RG32Float => 16,
+            TextureFormat.Rgb32Float => 6,
+            TextureFormat.Rgba32Float => 2,
+            TextureFormat.R11G11B10Float => 26,
+            TextureFormat.Rgb9E5 => 67,
+            TextureFormat.D24S8 => 45,
+            TextureFormat.D32FloatS8X24 => 20,
             _ => throw new NotSupportedException($"{format} has no DXGI value."),
         };
     }
+
+    // Rgba8 and Bgra8 get a DX10 header as Switch Toolbox gives them one; masks can't say signed, float or depth.
+    private static bool UsesDx10(TextureFormat format, bool snorm)
+        => format is TextureFormat.Rgba8 or TextureFormat.Bgra8 or TextureFormat.Bc6 or TextureFormat.Bc7 || format.IsAstc()
+           || WideFormats.Handles(format) || (snorm && format is TextureFormat.R8 or TextureFormat.RG8);
 
     private static uint? LegacyFourCc(TextureFormat format, bool snorm) => format switch
     {

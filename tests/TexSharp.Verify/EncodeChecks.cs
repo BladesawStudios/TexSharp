@@ -1,7 +1,10 @@
 using TexSharp;
 
-// Encodes a test picture into each format, decodes it with our own decoder and reports how close it came
-// (PSNR over all four channels, or over the channels the format keeps).
+/// <summary>Encodes a test picture into each format and reports how close the decoded result came.</summary>
+/// <remarks>
+/// Closeness is PSNR over all four channels, or over the channels the format keeps, and each format has a floor it
+/// must reach. The decoder used is TexSharp's own.
+/// </remarks>
 internal static class EncodeChecks
 {
     // Floors are deliberately low: they catch an encoder that writes the wrong thing, not one that is merely not the best.
@@ -29,6 +32,17 @@ internal static class EncodeChecks
         return rgba;
     }
 
+    // The channels a format keeps.
+    public static int[] Channels(TextureFormat format) => format switch
+    {
+        TextureFormat.Bc4 or TextureFormat.R8 or TextureFormat.R16 or TextureFormat.R32 or TextureFormat.R16Float or TextureFormat.R32Float => [0],
+        TextureFormat.Bc5 or TextureFormat.RG8 or TextureFormat.Rg4 or TextureFormat.RG16 or TextureFormat.RG32
+            or TextureFormat.RG16Float or TextureFormat.RG32Float => [0, 1],
+        TextureFormat.Rgb565 or TextureFormat.Bgr565 or TextureFormat.Rgb32 or TextureFormat.Rgb32Float
+            or TextureFormat.R11G11B10Float or TextureFormat.B10G11R11Float => [0, 1, 2],
+        _ => [0, 1, 2, 3],
+    };
+
     public static double Psnr(byte[] a, byte[] b, int[] channels)
     {
         double sum = 0;
@@ -55,7 +69,8 @@ internal static class EncodeChecks
         return 0;
     }
 
-    public static int Run()
+    public static int Run()
+
     {
         int w = 96, h = 80, failures = 0;
         byte[] source = Picture(w, h);
@@ -63,13 +78,7 @@ internal static class EncodeChecks
         foreach (TextureFormat format in Enum.GetValues<TextureFormat>())
         {
             if (TextureEncoder.WhyNotEncodable(format) is not null) continue;
-            int[] channels = format switch
-            {
-                TextureFormat.Bc4 or TextureFormat.R8 => [0],
-                TextureFormat.Bc5 or TextureFormat.RG8 => [0, 1],
-                TextureFormat.Rgb565 => [0, 1, 2],
-                _ => [0, 1, 2, 3],
-            };
+            int[] channels = Channels(format);
             var timer = System.Diagnostics.Stopwatch.StartNew();
             // BC1 keeps one bit of alpha, so it is judged on a picture without any.
             byte[] input = format == TextureFormat.Bc1 ? opaque : source;
@@ -106,7 +115,7 @@ internal static class EncodeChecks
         foreach (TextureFormat format in Enum.GetValues<TextureFormat>().Where(f => TextureEncoder.WhyNotEncodable(f) is null))
         {
             byte[] back = TextureDecoder.ToRgba8(format, TextureEncoder.Encode(format, flat, 16, 16), 16, 16);
-            bool ok = format is TextureFormat.R8 or TextureFormat.RG8 or TextureFormat.Bc4 or TextureFormat.Bc5 or TextureFormat.Rgb565 or TextureFormat.Rgba4 or TextureFormat.Rgb10A2
+            bool ok = Channels(format).Length < 4 || format is TextureFormat.Rgba4 or TextureFormat.Rgb10A2
                 || Psnr(flat, back, [0, 1, 2, 3]) > 35;
             if (!ok) { failures++; Console.WriteLine($"FAIL flat {format}"); }
         }
