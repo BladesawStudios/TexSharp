@@ -105,7 +105,7 @@ internal static class BcDecoder
                 palette[6] = -127;
                 palette[7] = 127;
             }
-            for (int i = 0; i < 8; i++) palette[i] = (palette[i] + 127) * 255 / 254;
+            for (int i = 0; i < 8; i++) palette[i] = SignedValues.ToByte(palette[i]);
         }
         else
         {

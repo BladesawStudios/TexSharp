@@ -1,58 +1,61 @@
 namespace TexSharp;
 
-/// <summary>
-/// Conversions between the small uncompressed layouts and RGBA8. Most image editors won't open a one or
-/// two channel DDS or a packed 16-bit one, so these are exported as RGBA8 and collapsed back on import.
-/// Every channel is 8 bits or fewer, so for an unedited image expanding then collapsing gives the
-/// original bytes. Rgb10A2 doesn't fit in 8 bits per channel and is left out of the pair.
-/// </summary>
+/// <summary>Conversions between the small uncompressed layouts and RGBA8.</summary>
+/// <remarks>
+/// Most image editors won't open a one or two channel DDS or a packed 16-bit one, so these are exported as RGBA8 and
+/// collapsed back on import. Every channel is 8 bits or fewer and is widened by repeating its bits, so for an unedited
+/// image expanding then collapsing gives the original bytes. Rgb10A2 doesn't fit in 8 bits per channel and is left out
+/// of the pair. A packed layout is the place and width of each channel in a little-endian 16-bit value, as Switch
+/// Toolbox reads Rgb565 and Rgba4. A missing alpha reads as 255.
+/// </remarks>
 public static class PixelFormats
 {
-    /// <summary>True for the formats <see cref="ExpandToRgba8"/> and <see cref="CollapseRgba8"/> handle.</summary>
+    private readonly record struct Channel(int Shift, int Bits);
+
+    private readonly record struct Packed(Channel R, Channel G, Channel B, Channel A);
+
+    private static readonly Channel None = new(0, 0);
+
+    private static readonly Dictionary<TextureFormat, Packed> PackedLayouts = new()
+    {
+        [TextureFormat.Rgb565] = new(new(11, 5), new(5, 6), new(0, 5), None),
+        [TextureFormat.Rgba4] = new(new(8, 4), new(4, 4), new(0, 4), new(12, 4)),
+    };
+
+    // the formats ExpandToRgba8 and CollapseRgba8 handle
     public static bool CanRoundTripThroughRgba8(TextureFormat format)
-        => format is TextureFormat.R8 or TextureFormat.RG8 or TextureFormat.Rgb565 or TextureFormat.Rgba4;
+        => format is TextureFormat.R8 or TextureFormat.RG8 || PackedLayouts.ContainsKey(format);
 
     public static byte[] ExpandToRgba8(TextureFormat format, ReadOnlySpan<byte> data, int pixelCount)
     {
+        if (!CanRoundTripThroughRgba8(format)) throw new NotSupportedException($"{format} has no RGBA8 expansion.");
         byte[] output = new byte[checked(pixelCount * 4)];
-        int available = Math.Min(pixelCount, data.Length / format.BytesPerBlock());
+        int bytes = format.BytesPerBlock();
+        int available = Math.Min(pixelCount, data.Length / bytes);
         Span<byte> dst = output;
 
         for (int i = 0; i < available; i++)
         {
             Span<byte> px = dst.Slice(i * 4, 4);
-            switch (format)
+            if (format == TextureFormat.R8)
             {
-                case TextureFormat.R8:
-                    px[0] = px[1] = px[2] = data[i];
-                    px[3] = 255;
-                    break;
-                case TextureFormat.RG8:
-                    px[0] = data[i * 2];
-                    px[1] = data[i * 2 + 1];
-                    px[3] = 255;
-                    break;
-                case TextureFormat.Rgb565:
-                {
-                    int v = data[i * 2] | (data[i * 2 + 1] << 8);
-                    int r = (v >> 11) & 0x1F, g = (v >> 5) & 0x3F, b = v & 0x1F;
-                    px[0] = (byte)((r << 3) | (r >> 2));
-                    px[1] = (byte)((g << 2) | (g >> 4));
-                    px[2] = (byte)((b << 3) | (b >> 2));
-                    px[3] = 255;
-                    break;
-                }
-                case TextureFormat.Rgba4:
-                {
-                    int v = data[i * 2] | (data[i * 2 + 1] << 8);
-                    px[0] = (byte)(((v >> 8) & 0xF) * 17);
-                    px[1] = (byte)(((v >> 4) & 0xF) * 17);
-                    px[2] = (byte)((v & 0xF) * 17);
-                    px[3] = (byte)(((v >> 12) & 0xF) * 17);
-                    break;
-                }
-                default:
-                    throw new NotSupportedException($"{format} has no RGBA8 expansion.");
+                px[0] = px[1] = px[2] = data[i];
+                px[3] = 255;
+            }
+            else if (format == TextureFormat.RG8)
+            {
+                px[0] = data[i * 2];
+                px[1] = data[i * 2 + 1];
+                px[3] = 255;
+            }
+            else
+            {
+                var layout = PackedLayouts[format];
+                int v = bytes == 1 ? data[i] : data[i * 2] | (data[i * 2 + 1] << 8);
+                px[0] = Expand(v, layout.R, 0);
+                px[1] = Expand(v, layout.G, 0);
+                px[2] = Expand(v, layout.B, 0);
+                px[3] = Expand(v, layout.A, 255);
             }
         }
         return output;
@@ -61,37 +64,40 @@ public static class PixelFormats
     public static byte[] CollapseRgba8(TextureFormat format, ReadOnlySpan<byte> rgba, int pixelCount)
     {
         if (!CanRoundTripThroughRgba8(format)) throw new NotSupportedException($"{format} has no RGBA8 collapse.");
-        byte[] output = new byte[checked(pixelCount * format.BytesPerBlock())];
+        int bytes = format.BytesPerBlock();
+        byte[] output = new byte[checked(pixelCount * bytes)];
         int available = Math.Min(pixelCount, rgba.Length / 4);
 
         for (int i = 0; i < available; i++)
         {
             ReadOnlySpan<byte> px = rgba.Slice(i * 4, 4);
-            switch (format)
+            if (format == TextureFormat.R8)
+                output[i] = px[0];
+            else if (format == TextureFormat.RG8)
             {
-                case TextureFormat.R8:
-                    output[i] = px[0];
-                    break;
-                case TextureFormat.RG8:
-                    output[i * 2] = px[0];
-                    output[i * 2 + 1] = px[1];
-                    break;
-                case TextureFormat.Rgb565:
-                {
-                    int v = ((px[0] >> 3) << 11) | ((px[1] >> 2) << 5) | (px[2] >> 3);
-                    output[i * 2] = (byte)v;
-                    output[i * 2 + 1] = (byte)(v >> 8);
-                    break;
-                }
-                case TextureFormat.Rgba4:
-                {
-                    int v = ((px[3] >> 4) << 12) | ((px[0] >> 4) << 8) | ((px[1] >> 4) << 4) | (px[2] >> 4);
-                    output[i * 2] = (byte)v;
-                    output[i * 2 + 1] = (byte)(v >> 8);
-                    break;
-                }
+                output[i * 2] = px[0];
+                output[i * 2 + 1] = px[1];
+            }
+            else
+            {
+                var layout = PackedLayouts[format];
+                int v = Collapse(px[0], layout.R) | Collapse(px[1], layout.G) | Collapse(px[2], layout.B) | Collapse(px[3], layout.A);
+                output[i * bytes] = (byte)v;
+                if (bytes == 2) output[i * 2 + 1] = (byte)(v >> 8);
             }
         }
         return output;
     }
+
+    // A channel widened to 8 bits by repeating its bits, so 0 stays 0 and all ones becomes 255.
+    private static byte Expand(int value, Channel c, byte missing)
+    {
+        if (c.Bits == 0) return missing;
+        int x = (value >> c.Shift) & ((1 << c.Bits) - 1);
+        int r = 0, have = 0;
+        while (have < 8) { r = (r << c.Bits) | x; have += c.Bits; }
+        return (byte)(r >> (have - 8));
+    }
+
+    private static int Collapse(byte value, Channel c) => c.Bits == 0 ? 0 : (value >> (8 - c.Bits)) << c.Shift;
 }
